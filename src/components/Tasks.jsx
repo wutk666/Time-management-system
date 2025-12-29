@@ -1,34 +1,114 @@
+```javascript
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreVertical, CheckCircle2, Circle } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
 
+import { tasksAPI } from '../services/api';
+
 const Tasks = () => {
-    const [tasks, setTasks] = useState(() => {
-        const saved = localStorage.getItem('chronos_tasks');
-        return saved ? JSON.parse(saved) : [
-            { id: 1, title: 'Build UI for Chronos', completed: false, priority: 'High', category: 'Dev' },
-            { id: 2, title: 'Database schema design', completed: true, priority: 'Medium', category: 'Backend' },
-            { id: 3, title: 'User interview synthesis', completed: false, priority: 'Low', category: 'Research' },
-            { id: 4, title: 'Deploy to production', completed: false, priority: 'High', category: 'Ops' },
-        ];
-    });
+    const [tasks, setTasks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [newTask, setNewTask] = useState('');
+    const [filter, setFilter] = useState('all');
 
+    // Load tasks from API
     useEffect(() => {
-        localStorage.setItem('chronos_tasks', JSON.stringify(tasks));
-    }, [tasks]);
+        const fetchTasks = async () => {
+            try {
+                setLoading(true);
+                const response = await tasksAPI.getTasks();
+                setTasks(response.data.tasks);
+                setError(null);
+            } catch (err) {
+                setError('Failed to load tasks from server');
+                console.error(err);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-    const toggleTask = (id) => {
-        setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+        fetchTasks();
+    }, []);
+
+    const addTask = async (e) => {
+        e.preventDefault();
+        if (!newTask.trim()) return;
+
+        try {
+            const taskData = {
+                title: newTask,
+                completed: false,
+                priority: 'Medium',
+                category: 'General'
+            };
+
+            const response = await tasksAPI.createTask(taskData);
+            setTasks([response.data.task, ...tasks]);
+            setNewTask('');
+        } catch (err) {
+            setError('Failed to add task');
+        }
     };
+
+    const toggleTask = async (id) => {
+        const taskToToggle = tasks.find(t => t._id === id);
+        if (!taskToToggle) return;
+
+        try {
+            const response = await tasksAPI.updateTask(id, {
+                completed: !taskToToggle.completed
+            });
+            setTasks(tasks.map(task =>
+                task._id === id ? response.data.task : task
+            ));
+        } catch (err) {
+            setError('Failed to update task');
+        }
+    };
+
+    const deleteTask = async (id) => {
+        try {
+            await tasksAPI.deleteTask(id);
+            setTasks(tasks.filter(task => task._id !== id));
+        } catch (err) {
+            setError('Failed to delete task');
+        }
+    };
+
+    if (loading) {
+        return <div className="tasks-container" style={{ padding: '20px', width: '100%', maxWidth: '900px', margin: '0 auto', color: 'var(--text-primary)' }}>Loading tasks...</div>;
+    }
+
+    if (error) {
+        return <div className="tasks-container" style={{ padding: '20px', width: '100%', maxWidth: '900px', margin: '0 auto', color: 'var(--accent-danger)' }}>Error: {error}</div>;
+    }
 
     return (
         <div className="tasks-container" style={{ padding: '20px', width: '100%', maxWidth: '900px', margin: '0 auto' }}>
             <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
                 <h2 style={{ fontSize: '28px', fontWeight: '700' }}>Tasks</h2>
-                <button className="primary-btn" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Plus size={20} />
-                    New Task
-                </button>
+                <form onSubmit={addTask}>
+                    <input
+                        type="text"
+                        value={newTask}
+                        onChange={(e) => setNewTask(e.target.value)}
+                        placeholder="Add a new task..."
+                        style={{
+                            background: 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            borderRadius: '8px',
+                            padding: '10px 15px',
+                            color: 'white',
+                            outline: 'none',
+                            marginRight: '10px'
+                        }}
+                    />
+                    <button type="submit" className="primary-btn" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Plus size={20} />
+                        New Task
+                    </button>
+                </form>
             </header>
 
             <div style={{ display: 'flex', gap: '15px', marginBottom: '25px' }}>
@@ -56,7 +136,7 @@ const Tasks = () => {
             <div className="task-list">
                 {tasks.map((task) => (
                     <motion.div
-                        key={task.id}
+                        key={task._id}
                         layout
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -71,7 +151,7 @@ const Tasks = () => {
                         }}
                     >
                         <button
-                            onClick={() => toggleTask(task.id)}
+                            onClick={() => toggleTask(task._id)}
                             style={{ background: 'transparent', color: task.completed ? 'var(--accent-success)' : 'var(--text-dim)' }}
                         >
                             {task.completed ? <CheckCircle2 size={24} /> : <Circle size={24} />}
