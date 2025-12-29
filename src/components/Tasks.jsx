@@ -1,4 +1,3 @@
-```javascript
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreVertical, CheckCircle2, Circle } from 'lucide-react';
 import { motion, Reorder } from 'framer-motion';
